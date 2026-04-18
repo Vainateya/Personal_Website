@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #1a1814;
+  --prussian: #1d3557;
+  --stone: #b8a99a;
+  --ivory: #f8f5ef;
+  --warm-grey: #6e6b64;
+  --mist: #ebf0f7;
+  --border: #e0ddd6;
+  --admin-ivory: #f0ede6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ivory);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ivory);
+  color: var(--ink);
+  font-family: var(--font-lora), Georgia, serif;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+a {
+  color: var(--prussian);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--ivory);
+  color: var(--ink);
+  padding: 12px 14px;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  padding: 0;
+}
+
+textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.prose-editorial {
+  color: rgb(26 24 20 / 80%);
+}
+
+.prose-editorial p {
+  margin: 0 0 1.1rem;
+}
+
+.prose-editorial h1,
+.prose-editorial h2,
+.prose-editorial h3 {
+  margin: 0 0 0.9rem;
+  color: var(--ink);
+  font-family: var(--font-lora), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.prose-editorial ul,
+.prose-editorial ol {
+  margin: 0 0 1rem;
+  padding-left: 1.3rem;
+}
+
+.prose-editorial blockquote {
+  margin: 0 0 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--stone);
+  color: var(--warm-grey);
+}
+
+.tiptap {
+  min-height: 220px;
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--warm-grey);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+}
