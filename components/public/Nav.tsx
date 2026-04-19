@@ -25,8 +25,10 @@ export function Nav({ currentPage, showAdminLink = false }: NavProps) {
               key={page}
               href={pagePaths[page]}
               className={cn(
-                "font-sans text-[10px] uppercase tracking-label text-warm-grey hover:text-prussian hover:no-underline",
-                currentPage === page && "text-prussian"
+                "font-sans text-[10px] uppercase tracking-label text-warm-grey hover:no-underline",
+                currentPage === page
+                  ? "border-b border-prussian pb-px text-prussian"
+                  : "hover:text-prussian"
               )}
             >
               {pageLabels[page] === "Home" ? "Work" : pageLabels[page]}

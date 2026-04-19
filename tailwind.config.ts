@@ -34,7 +34,7 @@ const config: Config = {
         label: "0.1em"
       },
       borderRadius: {
-        editorial: "4px"
+        editorial: "3px"
       },
       opacity: {
         80: "0.8"

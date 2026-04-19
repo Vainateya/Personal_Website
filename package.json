@@ -13,6 +13,7 @@
     "@hello-pangea/dnd": "^18.0.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.4",
+    "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-link": "^2.11.5",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",

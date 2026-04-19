@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -19,7 +20,32 @@ type BlockFormProps = {
   block: BlockRecord | null;
   onCancel: () => void;
   onSave: (block: BlockRecord) => Promise<void>;
+  inline?: boolean;
 };
+
+function ToolbarButton({
+  active,
+  onClick,
+  children
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-2 py-1 font-sans text-[10px] uppercase tracking-label transition-colors ${
+        active
+          ? "bg-prussian text-ivory"
+          : "text-warm-grey hover:bg-mist hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function RichTextEditor({
   value,
@@ -30,7 +56,11 @@ function RichTextEditor({
 }) {
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit, Link],
+    extensions: [
+      StarterKit,
+      Link.configure({ openOnClick: false }),
+      Image.configure({ inline: false, allowBase64: false })
+    ],
     content: value,
     editorProps: {
       attributes: {
@@ -49,23 +79,76 @@ function RichTextEditor({
     }
   }, [editor, value]);
 
+  function addLink() {
+    const url = window.prompt("Enter URL");
+    if (!url) return;
+    if (editor?.state.selection.empty) {
+      editor.chain().focus().setLink({ href: url }).run();
+    } else {
+      editor?.chain().focus().toggleLink({ href: url }).run();
+    }
+  }
+
+  function addImage() {
+    const url = window.prompt("Enter image URL");
+    if (!url) return;
+    const alt = window.prompt("Alt text / caption") ?? "";
+    editor?.chain().focus().setImage({ src: url, alt, title: alt }).run();
+  }
+
   return (
-    <div className="space-y-2 border border-border bg-ivory p-3">
-      <div className="flex flex-wrap gap-2 font-sans text-[10px] uppercase tracking-label text-warm-grey">
-        <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()}>
-          Bold
-        </button>
-        <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()}>
-          Italic
-        </button>
-        <button
-          type="button"
+    <div className="border border-border bg-ivory">
+      <div className="flex flex-wrap gap-px border-b border-border bg-ivory p-1.5">
+        <ToolbarButton
+          active={editor?.isActive("bold")}
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+        >
+          B
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor?.isActive("italic")}
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+        >
+          I
+        </ToolbarButton>
+        <span className="mx-1 w-px self-stretch bg-border" />
+        <ToolbarButton
+          active={editor?.isActive("heading", { level: 2 })}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          H2
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor?.isActive("heading", { level: 3 })}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+        >
+          H3
+        </ToolbarButton>
+        <span className="mx-1 w-px self-stretch bg-border" />
+        <ToolbarButton
+          active={editor?.isActive("bulletList")}
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
         >
-          Bullets
-        </button>
+          • List
+        </ToolbarButton>
+        <ToolbarButton
+          active={editor?.isActive("orderedList")}
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+        >
+          1. List
+        </ToolbarButton>
+        <span className="mx-1 w-px self-stretch bg-border" />
+        <ToolbarButton
+          active={editor?.isActive("link")}
+          onClick={addLink}
+        >
+          Link
+        </ToolbarButton>
+        <ToolbarButton onClick={addImage}>Image</ToolbarButton>
       </div>
-      <EditorContent editor={editor} />
+      <div className="p-3">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }
@@ -74,7 +157,7 @@ function toJsonString(value: unknown) {
   return Array.isArray(value) ? value.join(", ") : "";
 }
 
-export function BlockForm({ block, onCancel, onSave }: BlockFormProps) {
+export function BlockForm({ block, onCancel, onSave, inline = false }: BlockFormProps) {
   const [draft, setDraft] = useState<BlockRecord | null>(block);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -83,6 +166,7 @@ export function BlockForm({ block, onCancel, onSave }: BlockFormProps) {
   }, [block]);
 
   if (!draft) {
+    if (inline) return null;
     return (
       <div className="border border-dashed border-border p-5">
         <p className="font-sans text-[11px] text-warm-grey">
@@ -97,10 +181,7 @@ export function BlockForm({ block, onCancel, onSave }: BlockFormProps) {
   }
 
   async function handleSave() {
-    if (!draft) {
-      return;
-    }
-
+    if (!draft) return;
     setIsSaving(true);
     await onSave(draft);
     setIsSaving(false);
@@ -109,30 +190,28 @@ export function BlockForm({ block, onCancel, onSave }: BlockFormProps) {
   const data = draft.data;
 
   return (
-    <div className="space-y-5 border border-border bg-ivory p-5">
-      <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
-        <div className="space-y-1">
-          <p className="font-sans text-[10px] uppercase tracking-label text-stone">
-            Edit block
-          </p>
-          <h2 className="font-serif text-[26px] font-normal tracking-editorial text-ink">
-            {draft.type}
-          </h2>
+    <div className={`space-y-5 bg-ivory p-5 ${inline ? "" : "border border-border"}`}>
+      {!inline && (
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+          <div className="space-y-1">
+            <p className="font-sans text-[10px] uppercase tracking-label text-stone">Edit block</p>
+            <h2 className="font-serif text-[26px] font-normal tracking-editorial text-ink">
+              {draft.type}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
+          >
+            Close
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
-        >
-          Close
-        </button>
-      </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-2">
-          <span className="font-sans text-[10px] uppercase tracking-label text-stone">
-            Section
-          </span>
+          <span className="font-sans text-[10px] uppercase tracking-label text-stone">Section</span>
           <input
             value={draft.section}
             onChange={(event) =>
@@ -181,15 +260,24 @@ export function BlockForm({ block, onCancel, onSave }: BlockFormProps) {
         <TimelineFields data={data as TimelineData} onChange={updateData} />
       ) : null}
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 border-t border-border pt-4">
         <button
           type="button"
           onClick={handleSave}
-          className="border-prussian bg-prussian px-4 py-2 font-sans text-[10px] uppercase tracking-label text-ivory"
+          className="border-prussian bg-prussian px-4 py-2 font-sans text-[10px] uppercase tracking-label text-ivory disabled:opacity-60"
           disabled={isSaving}
         >
-          {isSaving ? "Saving" : "Save block"}
+          {isSaving ? "Saving…" : "Save block"}
         </button>
+        {inline && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
+          >
+            Collapse
+          </button>
+        )}
       </div>
     </div>
   );
@@ -234,6 +322,7 @@ function CardFields({
           label="Thumbnail URL"
           value={data.thumbnail_url}
           onChange={(value) => onChange({ ...data, thumbnail_url: value })}
+          hint="Paste a direct image URL"
         />
       </div>
       <LabeledInput
@@ -248,7 +337,7 @@ function CardFields({
               .filter(Boolean)
           })
         }
-        hint="Comma-separated"
+        hint="Comma-separated. First tag = venue (prussian), rest = secondary (mist)."
       />
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -263,15 +352,15 @@ function CardFields({
             }
             className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
           >
-            Add link
+            + Add link
           </button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {links.map((link, index) => (
-            <div key={index} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
               <input
                 value={link.label}
-                placeholder="Label"
+                placeholder="Label (e.g. Paper)"
                 onChange={(event) => {
                   const nextLinks = [...links];
                   nextLinks[index] = { ...link, label: event.target.value };
@@ -280,7 +369,7 @@ function CardFields({
               />
               <input
                 value={link.url}
-                placeholder="URL"
+                placeholder="https://..."
                 onChange={(event) => {
                   const nextLinks = [...links];
                   nextLinks[index] = { ...link, url: event.target.value };
@@ -292,7 +381,7 @@ function CardFields({
                 onClick={() =>
                   onChange({
                     ...data,
-                    links: links.filter((_, itemIndex) => itemIndex !== index)
+                    links: links.filter((_, i) => i !== index)
                   })
                 }
                 className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-[#8b3a2e] hover:bg-mist"
@@ -341,9 +430,7 @@ function RichTextFields({
         />
       </div>
       <div className="space-y-2">
-        <p className="font-sans text-[10px] uppercase tracking-label text-stone">
-          Content
-        </p>
+        <p className="font-sans text-[10px] uppercase tracking-label text-stone">Content</p>
         <RichTextEditor
           value={data.content}
           onChange={(value) => onChange({ ...data, content: value })}
@@ -376,11 +463,11 @@ function LinkListFields({
           }
           className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
         >
-          Add item
+          + Add item
         </button>
       </div>
       {items.map((item, index) => (
-        <div key={index} className="grid gap-3 md:grid-cols-[120px_1fr_1fr_auto]">
+        <div key={index} className="grid gap-2 md:grid-cols-[100px_1fr_1fr_auto]">
           <input
             value={item.icon}
             placeholder="Icon"
@@ -401,7 +488,7 @@ function LinkListFields({
           />
           <input
             value={item.url}
-            placeholder="URL"
+            placeholder="https://..."
             onChange={(event) => {
               const nextItems = [...items];
               nextItems[index] = { ...item, url: event.target.value };
@@ -413,7 +500,7 @@ function LinkListFields({
             onClick={() =>
               onChange({
                 ...data,
-                items: items.filter((_, itemIndex) => itemIndex !== index)
+                items: items.filter((_, i) => i !== index)
               })
             }
             className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-[#8b3a2e] hover:bg-mist"
@@ -507,11 +594,11 @@ function FormFields({
           }
           className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
         >
-          Add field
+          + Add field
         </button>
       </div>
       {fields.map((field, index) => (
-        <div key={index} className="grid gap-3 md:grid-cols-[1fr_120px_1fr_auto_auto]">
+        <div key={index} className="grid gap-2 md:grid-cols-[1fr_100px_1fr_auto_auto]">
           <input
             value={field.name}
             placeholder="Name"
@@ -539,25 +626,25 @@ function FormFields({
               onChange({ ...data, fields: nextFields });
             }}
           />
-          <label className="flex items-center gap-2 border border-border px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey">
+          <label className="flex items-center gap-1.5 border border-border px-2 py-1 font-sans text-[10px] uppercase tracking-label text-warm-grey">
             <input
               type="checkbox"
               checked={field.required}
-              className="h-4 w-4"
+              className="h-3 w-3"
               onChange={(event) => {
                 const nextFields = [...fields];
                 nextFields[index] = { ...field, required: event.target.checked };
                 onChange({ ...data, fields: nextFields });
               }}
             />
-            Required
+            Req
           </label>
           <button
             type="button"
             onClick={() =>
               onChange({
                 ...data,
-                fields: fields.filter((_, itemIndex) => itemIndex !== index)
+                fields: fields.filter((_, i) => i !== index)
               })
             }
             className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-[#8b3a2e] hover:bg-mist"
@@ -598,12 +685,12 @@ function TimelineFields({
           }
           className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
         >
-          Add entry
+          + Add entry
         </button>
       </div>
       {entries.map((entry, index) => (
-        <div key={index} className="space-y-3 border border-border p-4">
-          <div className="grid gap-3 md:grid-cols-2">
+        <div key={index} className="space-y-2 border border-border p-4">
+          <div className="grid gap-2 md:grid-cols-2">
             <input
               value={entry.year}
               placeholder="Year"
@@ -646,7 +733,7 @@ function TimelineFields({
             onClick={() =>
               onChange({
                 ...data,
-                entries: entries.filter((_, itemIndex) => itemIndex !== index)
+                entries: entries.filter((_, i) => i !== index)
               })
             }
             className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-[#8b3a2e] hover:bg-mist"
@@ -672,11 +759,11 @@ function LabeledInput({
 }) {
   return (
     <label className="space-y-2">
-      <span className="font-sans text-[10px] uppercase tracking-label text-stone">
-        {label}
-      </span>
+      <span className="font-sans text-[10px] uppercase tracking-label text-stone">{label}</span>
       <input value={value} onChange={(event) => onChange(event.target.value)} />
-      {hint ? <span className="block font-sans text-[11px] text-warm-grey">{hint}</span> : null}
+      {hint ? (
+        <span className="block font-sans text-[11px] text-warm-grey">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -692,9 +779,7 @@ function LabeledTextarea({
 }) {
   return (
     <label className="space-y-2">
-      <span className="font-sans text-[10px] uppercase tracking-label text-stone">
-        {label}
-      </span>
+      <span className="font-sans text-[10px] uppercase tracking-label text-stone">{label}</span>
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );

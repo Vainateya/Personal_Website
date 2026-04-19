@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AddBlockMenu } from "@/components/admin/AddBlockMenu";
-import { BlockForm } from "@/components/admin/BlockForm";
 import { BlockList } from "@/components/admin/BlockList";
 import { PreviewToggle } from "@/components/admin/PreviewToggle";
 import { BlockRenderer } from "@/components/public/BlockRenderer";
@@ -20,7 +19,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
   const [selectedPage, setSelectedPage] = useState<PageName>(initialPage);
   const [blocksByPage, setBlocksByPage] =
     useState<Record<PageName, BlockRecord[]>>(initialBlocks);
-  const [editingBlock, setEditingBlock] = useState<BlockRecord | null>(null);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [status, setStatus] = useState<string>("Ready");
   const [isPending, startTransition] = useTransition();
@@ -38,9 +37,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
   async function revalidatePublicPaths(page: PageName) {
     await fetch("/api/revalidate", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ page })
     });
   }
@@ -58,9 +55,10 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       return;
     }
 
-    replacePageBlocks(selectedPage, [...pageBlocks, data as BlockRecord]);
-    setEditingBlock(data as BlockRecord);
-    setStatus("Block created.");
+    const newBlock = data as BlockRecord;
+    replacePageBlocks(selectedPage, [...pageBlocks, newBlock]);
+    setEditingBlockId(newBlock.id);
+    setStatus("Block created — fill in details below.");
   }
 
   async function handleSaveBlock(block: BlockRecord) {
@@ -87,8 +85,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       selectedPage,
       pageBlocks.map((item) => (item.id === block.id ? (data as BlockRecord) : item))
     );
-    setEditingBlock(data as BlockRecord);
-    setStatus("Block saved.");
+    setStatus("Saved.");
     await revalidatePublicPaths(selectedPage);
     router.refresh();
   }
@@ -105,19 +102,14 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       selectedPage,
       pageBlocks.filter((block) => block.id !== id)
     );
-    if (editingBlock?.id === id) {
-      setEditingBlock(null);
-    }
+    if (editingBlockId === id) setEditingBlockId(null);
     setStatus("Block deleted.");
     await revalidatePublicPaths(selectedPage);
   }
 
   async function handleToggleVisibility(id: string) {
     const target = pageBlocks.find((block) => block.id === id);
-
-    if (!target) {
-      return;
-    }
+    if (!target) return;
 
     const { data, error } = await supabase
       .from("blocks")
@@ -135,7 +127,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       selectedPage,
       pageBlocks.map((block) => (block.id === id ? (data as BlockRecord) : block))
     );
-    setStatus((data as BlockRecord).is_public ? "Block published." : "Block moved to draft.");
+    setStatus((data as BlockRecord).is_public ? "Published." : "Moved to draft.");
     await revalidatePublicPaths(selectedPage);
   }
 
@@ -164,7 +156,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       return;
     }
 
-    setStatus("Block order updated.");
+    setStatus("Order updated.");
     await revalidatePublicPaths(selectedPage);
   }
 
@@ -176,7 +168,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
 
   function switchPage(page: PageName) {
     setSelectedPage(page);
-    setEditingBlock(null);
+    setEditingBlockId(null);
     const next = new URLSearchParams(searchParams.toString());
     next.set("page", page);
     startTransition(() => {
@@ -185,56 +177,49 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
   }
 
   return (
-    <div className="grid min-h-screen bg-admin-ivory md:grid-cols-[220px_minmax(0,1fr)]">
+    <div className="grid min-h-screen bg-admin-ivory md:grid-cols-[200px_minmax(0,1fr)]">
+      {/* Sidebar */}
       <aside className="border-b border-border bg-admin-ivory p-5 md:border-b-0 md:border-r">
         <div className="space-y-8">
           <div className="space-y-1">
-            <p className="font-sans text-[10px] uppercase tracking-label text-stone">
-              Content
-            </p>
+            <p className="font-sans text-[10px] uppercase tracking-label text-stone">Content</p>
             <h1 className="font-serif text-[26px] font-normal tracking-editorial text-ink">
               Admin
             </h1>
           </div>
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             {pages.map((page) => (
               <button
                 key={page}
                 type="button"
                 onClick={() => switchPage(page)}
-                className={`block w-full border px-3 py-3 text-left font-sans text-[10px] uppercase tracking-label ${
+                className={`block w-full px-3 py-2.5 text-left font-sans text-[10px] uppercase tracking-label transition-colors ${
                   selectedPage === page
-                    ? "border-prussian bg-prussian text-ivory"
-                    : "border-border bg-ivory text-warm-grey hover:bg-mist"
+                    ? "bg-prussian text-ivory"
+                    : "text-warm-grey hover:bg-mist"
                 }`}
               >
                 {pageLabels[page]}
               </button>
             ))}
           </nav>
-          <div className="space-y-2 border-t border-border pt-5">
-            <p className="font-sans text-[10px] uppercase tracking-label text-stone">
-              Future sections
-            </p>
-            <p className="text-sm text-ink/80">
-              The shell is ready for more sidebar modules like your personal dashboard.
-            </p>
-          </div>
         </div>
       </aside>
 
+      {/* Main */}
       <main className="min-w-0">
-        <div className="border-b border-border bg-ivory px-5 py-4 md:px-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
+        {/* Toolbar */}
+        <div className="border-b border-border bg-ivory px-5 py-3 md:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
               <p className="font-sans text-[10px] uppercase tracking-label text-stone">
                 {pageLabels[selectedPage]}
               </p>
               <p className="font-sans text-[11px] text-warm-grey">
-                {isPending ? "Switching page..." : status}
+                {isPending ? "Switching…" : status}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <PreviewToggle
                 enabled={previewMode}
                 onToggle={() => setPreviewMode((current) => !current)}
@@ -243,7 +228,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="px-4 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
+                className="px-3 py-2 font-sans text-[10px] uppercase tracking-label text-warm-grey hover:bg-mist"
               >
                 Logout
               </button>
@@ -251,6 +236,7 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
           </div>
         </div>
 
+        {/* Content area */}
         <div className="px-5 py-6 md:px-8">
           {previewMode ? (
             <div className="mx-auto max-w-content space-y-card">
@@ -263,37 +249,29 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
               )}
             </div>
           ) : (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-              <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-sans text-[10px] uppercase tracking-label text-stone">
-                    Blocks
-                  </p>
+            <div className="mx-auto max-w-3xl space-y-3">
+              {pageBlocks.length ? (
+                <BlockList
+                  blocks={pageBlocks}
+                  editingBlockId={editingBlockId}
+                  onEdit={(block) =>
+                    setEditingBlockId(
+                      block.id === editingBlockId ? null : block.id
+                    )
+                  }
+                  onCancelEdit={() => setEditingBlockId(null)}
+                  onSave={handleSaveBlock}
+                  onDelete={handleDeleteBlock}
+                  onToggleVisibility={handleToggleVisibility}
+                  onReorder={handleReorder}
+                />
+              ) : (
+                <div className="border border-dashed border-border p-5 text-center">
                   <p className="font-sans text-[11px] text-warm-grey">
-                    Drag to reorder. Draft and public live together here.
+                    No blocks yet. Use &ldquo;Add block&rdquo; above to start building this page.
                   </p>
                 </div>
-                {pageBlocks.length ? (
-                  <BlockList
-                    blocks={pageBlocks}
-                    onEdit={setEditingBlock}
-                    onDelete={handleDeleteBlock}
-                    onToggleVisibility={handleToggleVisibility}
-                    onReorder={handleReorder}
-                  />
-                ) : (
-                  <div className="border border-dashed border-border p-5 text-ink/80">
-                    No blocks on this page yet. Add one to start composing.
-                  </div>
-                )}
-              </section>
-              <section>
-                <BlockForm
-                  block={editingBlock}
-                  onCancel={() => setEditingBlock(null)}
-                  onSave={handleSaveBlock}
-                />
-              </section>
+              )}
             </div>
           )}
         </div>
