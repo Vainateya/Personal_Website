@@ -43,7 +43,9 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
   }
 
   async function handleAddBlock(type: BlockRecord["type"]) {
-    const draft = createEmptyBlock(selectedPage, "untitled", type);
+    const nextOrder =
+      pageBlocks.reduce((max, block) => Math.max(max, block.order), 0) + 1;
+    const draft = createEmptyBlock(selectedPage, "untitled", type, nextOrder);
     const { data, error } = await supabase
       .from("blocks")
       .insert(draft)
@@ -51,7 +53,8 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
       .single();
 
     if (error) {
-      setStatus("Unable to add block.");
+      console.error("Failed to add block:", error);
+      setStatus(`Unable to add block: ${error.message}`);
       return;
     }
 

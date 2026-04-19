@@ -1,11 +1,16 @@
 import type { BlockRecord, BlockType, PageName } from "@/types/blocks";
 
-export function createEmptyBlock(page: PageName, section: string, type: BlockType) {
+export function createEmptyBlock(
+  page: PageName,
+  section: string,
+  type: BlockType,
+  order = 1
+) {
   const base: Partial<BlockRecord> = {
     page,
     section,
     type,
-    order: Date.now(),
+    order,
     is_public: false
   };
 
