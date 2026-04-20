@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { BlockRecord, BlockType } from "@/types/blocks";
-import { blockTypes, blockTypeLabels } from "@/types/blocks";
+import { blockTypeLabels } from "@/types/blocks";
 
 const COLS = 12;
 const ROW_H = 80; // px per grid row in the editor
@@ -22,7 +22,7 @@ type GridEditorProps = {
   blocks: BlockRecord[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
-  onAddBlock: (type: BlockType, x: number, y: number) => Promise<void>;
+  onDropBlock: (type: BlockType, x: number, y: number) => Promise<void>;
   onUpdateBlock: (id: string, updates: Partial<Pick<BlockRecord, "x" | "y" | "w" | "h">>) => Promise<void>;
   onDeleteBlock: (id: string) => void;
 };
@@ -50,47 +50,11 @@ function getBlockPreview(block: BlockRecord): string {
   return "";
 }
 
-function BlockTypePicker({
-  onSelect,
-  onClose
-}: {
-  onSelect: (type: BlockType) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="z-50 min-w-[180px] border border-border bg-ivory shadow-none"
-      style={{ position: "absolute" }}
-    >
-      <div className="border-b border-border px-3 py-2">
-        <p className="font-sans text-[10px] uppercase tracking-label text-stone">Add block</p>
-      </div>
-      {blockTypes.map((type) => (
-        <button
-          key={type}
-          type="button"
-          onClick={() => onSelect(type)}
-          className="block w-full border-b border-border px-3 py-2.5 text-left font-sans text-[11px] text-warm-grey last:border-b-0 hover:bg-mist"
-        >
-          {blockTypeLabels[type]}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={onClose}
-        className="block w-full px-3 py-2 text-center font-sans text-[10px] uppercase tracking-label text-stone hover:bg-mist"
-      >
-        Cancel
-      </button>
-    </div>
-  );
-}
-
 export function GridEditor({
   blocks,
   selectedBlockId,
   onSelectBlock,
-  onAddBlock,
+  onDropBlock,
   onUpdateBlock,
   onDeleteBlock
 }: GridEditorProps) {
@@ -99,7 +63,8 @@ export function GridEditor({
   const colWidthRef = useRef(0);
 
   const [liveBlocks, setLiveBlocks] = useState<BlockRecord[]>(blocks);
-  const [blockPicker, setBlockPicker] = useState<{ x: number; y: number } | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dropPreview, setDropPreview] = useState<{ x: number; y: number } | null>(null);
   const [containerWidth, setContainerWidth] = useState(960);
 
   // Keep live blocks in sync with prop
@@ -128,6 +93,7 @@ export function GridEditor({
   const colWidth = containerWidth / COLS;
   const maxRow = Math.max(8, ...liveBlocks.map((b) => b.y + b.h)) + 4;
 
+  // ── Block drag/resize (existing blocks) ──────────────────
   const startDrag = useCallback(
     (kind: DragState["kind"], e: React.MouseEvent, block: BlockRecord) => {
       e.preventDefault();
@@ -202,13 +168,42 @@ export function GridEditor({
     [onUpdateBlock]
   );
 
-  function handleContainerClick(e: React.MouseEvent) {
-    if (e.target !== containerRef.current) return;
-    if (dragRef.current) return;
+  // ── Catalog → grid drop handling ─────────────────────────
+
+  function getCoordsFromEvent(e: React.DragEvent): { x: number; y: number } {
     const rect = containerRef.current!.getBoundingClientRect();
-    const x = Math.max(0, Math.min(11, Math.floor((e.clientX - rect.left) / colWidthRef.current)));
+    const x = Math.max(0, Math.min(COLS - 1, Math.floor((e.clientX - rect.left) / colWidthRef.current)));
     const y = Math.max(0, Math.floor((e.clientY - rect.top) / ROW_H));
-    setBlockPicker({ x, y });
+    return { x, y };
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    // Only handle drags that carry a block type (from catalog)
+    if (!e.dataTransfer.types.includes("text/plain")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+    setDropPreview(getCoordsFromEvent(e));
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    // Only clear if leaving the container itself (not a child)
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+      setDropPreview(null);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragOver(false);
+    setDropPreview(null);
+
+    const type = e.dataTransfer.getData("text/plain") as BlockType;
+    if (!type) return;
+
+    const { x, y } = getCoordsFromEvent(e);
+    await onDropBlock(type, x, y);
   }
 
   return (
@@ -220,14 +215,14 @@ export function GridEditor({
           width: "100%",
           minHeight: maxRow * ROW_H,
           userSelect: "none",
-          cursor: "crosshair"
+          cursor: isDragOver ? "copy" : "default"
         }}
-        onClick={handleContainerClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Grid overlay — vertical lines */}
-        <div
-          style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}
-        >
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
           {Array.from({ length: COLS + 1 }).map((_, i) => (
             <div
               key={`v${i}`}
@@ -238,7 +233,7 @@ export function GridEditor({
                 bottom: 0,
                 width: 1,
                 background: "#B8A99A",
-                opacity: 0.3
+                opacity: isDragOver ? 0.5 : 0.3
               }}
             />
           ))}
@@ -252,11 +247,29 @@ export function GridEditor({
                 right: 0,
                 height: 1,
                 background: "#B8A99A",
-                opacity: 0.3
+                opacity: isDragOver ? 0.5 : 0.3
               }}
             />
           ))}
         </div>
+
+        {/* Drop preview cell */}
+        {isDragOver && dropPreview && (
+          <div
+            style={{
+              position: "absolute",
+              left: dropPreview.x * colWidth,
+              top: dropPreview.y * ROW_H,
+              width: colWidth,
+              height: ROW_H,
+              background: "#1D355720",
+              border: "2px dashed #1D3557",
+              boxSizing: "border-box",
+              pointerEvents: "none",
+              zIndex: 5
+            }}
+          />
+        )}
 
         {/* Blocks */}
         {liveBlocks.map((block) => {
@@ -368,26 +381,6 @@ export function GridEditor({
             </div>
           );
         })}
-
-        {/* Block type picker */}
-        {blockPicker && (
-          <div
-            style={{
-              position: "absolute",
-              left: Math.min(blockPicker.x * colWidth, containerWidth - 200),
-              top: blockPicker.y * ROW_H,
-              zIndex: 50
-            }}
-          >
-            <BlockTypePicker
-              onSelect={async (type) => {
-                setBlockPicker(null);
-                await onAddBlock(type, blockPicker.x, blockPicker.y);
-              }}
-              onClose={() => setBlockPicker(null)}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

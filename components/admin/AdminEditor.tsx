@@ -9,9 +9,38 @@ import { GridEditor } from "@/components/admin/GridEditor";
 import { BlockPanel } from "@/components/admin/BlockPanel";
 import { PageSidebar } from "@/components/admin/PageSidebar";
 
+// ── Slug helpers ───────────────────────────────────────────
+
+function nameToBaseSlug(name: string): string {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")   // strip non-alphanumeric (keep spaces & hyphens)
+    .replace(/[\s-]+/g, "-")         // collapse spaces/hyphens → single hyphen
+    .replace(/^-+|-+$/g, "");        // trim leading/trailing hyphens
+  return base || "page";
+}
+
+function generateSlug(
+  name: string,
+  existingSlugs: string[],
+  excludeSlug?: string
+): string {
+  const base = nameToBaseSlug(name);
+  const others = existingSlugs.filter((s) => s !== excludeSlug);
+
+  if (!others.includes(base)) return base;
+
+  let i = 1;
+  while (others.includes(`${base}_${i}`)) i++;
+  return `${base}_${i}`;
+}
+
+// ── Component ──────────────────────────────────────────────
+
 type AdminEditorProps = {
   initialPages: PageRecord[];
-  initialBlocks: BlockRecord[]; // blocks for first selected page
+  initialBlocks: BlockRecord[];
   initialPageId: string;
 };
 
@@ -38,6 +67,7 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
   }
 
   // ── Pages ──────────────────────────────────────────────
+
   async function handleSelectPage(page: PageRecord) {
     setSelectedPageId(page.id);
     setSelectedBlockId(null);
@@ -48,38 +78,62 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
       .eq("page_id", page.id)
       .order("y", { ascending: true })
       .order("x", { ascending: true });
-    if (error) {
-      setStatus("Failed to load blocks.");
-      return;
-    }
+    if (error) { setStatus("Failed to load blocks."); return; }
     setBlocks((data ?? []) as BlockRecord[]);
     setStatus("Ready");
   }
 
-  async function handleAddPage() {
-    const name = window.prompt("Page name (e.g. Research)");
-    if (!name?.trim()) return;
-    const raw = window.prompt("URL slug (e.g. research)", name.toLowerCase().replace(/\s+/g, "-"));
-    if (!raw?.trim()) return;
-    const slug = raw.trim();
+  async function handleAddPage(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
 
-    const maxOrder = Math.max(0, ...pages.map((p) => p.nav_order));
+    const existingSlugs = pages.map((p) => p.slug);
+    const slug = generateSlug(trimmed, existingSlugs);
+    const maxOrder = pages.length > 0 ? Math.max(...pages.map((p) => p.nav_order)) : -1;
+
     const { data, error } = await supabase
       .from("pages")
-      .insert({ name: name.trim(), slug, nav_order: maxOrder + 1 })
+      .insert({ name: trimmed, slug, nav_order: maxOrder + 1 })
       .select("*")
       .single();
 
-    if (error) {
-      setStatus(`Error: ${error.message}`);
-      return;
-    }
+    if (error) { setStatus(`Error: ${error.message}`); return; }
     const newPage = data as PageRecord;
     setPages((prev) => [...prev, newPage]);
     setSelectedPageId(newPage.id);
     setBlocks([]);
     setSelectedBlockId(null);
     setStatus("Page created.");
+  }
+
+  async function handleRenamePage(id: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+
+    const currentPage = pages.find((p) => p.id === id);
+    if (!currentPage) return;
+
+    const existingSlugs = pages.map((p) => p.slug);
+    const newSlug = generateSlug(trimmed, existingSlugs, currentPage.slug);
+
+    const { data, error } = await supabase
+      .from("pages")
+      .update({ name: trimmed, slug: newSlug, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) { setStatus(`Error: ${error.message}`); return; }
+    const updated = data as PageRecord;
+
+    setPages((prev) => prev.map((p) => (p.id === id ? updated : p)));
+
+    // Revalidate old and new slugs
+    if (currentPage.slug !== newSlug) {
+      await revalidate(currentPage.slug);
+    }
+    await revalidate(newSlug);
+    setStatus("Page renamed.");
   }
 
   async function handleDeletePage(id: string) {
@@ -100,31 +154,24 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
     setStatus("Page deleted.");
   }
 
-  async function handleMovePage(id: string, direction: "up" | "down") {
+  async function handleReorderPages(fromIndex: number, toIndex: number) {
     const sorted = [...pages].sort((a, b) => a.nav_order - b.nav_order);
-    const idx = sorted.findIndex((p) => p.id === id);
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+    const [moved] = sorted.splice(fromIndex, 1);
+    sorted.splice(toIndex, 0, moved);
 
-    const a = sorted[idx];
-    const b = sorted[targetIdx];
-    const newOrder = { [a.id]: b.nav_order, [b.id]: a.nav_order };
+    // Reassign nav_order as 0, 1, 2, … for clean ordering
+    const updated = sorted.map((p, i) => ({ ...p, nav_order: i }));
+    setPages(updated); // optimistic update
 
-    const updates = [
-      supabase.from("pages").update({ nav_order: newOrder[a.id] }).eq("id", a.id),
-      supabase.from("pages").update({ nav_order: newOrder[b.id] }).eq("id", b.id)
-    ];
-    await Promise.all(updates);
-
-    setPages((prev) =>
-      prev.map((p) =>
-        p.id === a.id ? { ...p, nav_order: newOrder[a.id] } :
-        p.id === b.id ? { ...p, nav_order: newOrder[b.id] } : p
-      ).sort((x, y) => x.nav_order - y.nav_order)
+    await Promise.all(
+      updated.map((p) =>
+        supabase.from("pages").update({ nav_order: p.nav_order }).eq("id", p.id)
+      )
     );
   }
 
   // ── Blocks ─────────────────────────────────────────────
+
   const handleAddBlock = useCallback(
     async (type: BlockType, x: number, y: number) => {
       if (!selectedPageId) return;
@@ -199,7 +246,7 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
   }
 
   return (
-    <div className="grid min-h-screen" style={{ gridTemplateColumns: "180px minmax(0,1fr) 320px" }}>
+    <div className="grid h-screen overflow-hidden" style={{ gridTemplateColumns: "180px minmax(0,1fr) 320px" }}>
       {/* Page sidebar */}
       <PageSidebar
         pages={pages}
@@ -207,14 +254,14 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
         onSelect={handleSelectPage}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
-        onMoveUp={(id) => handleMovePage(id, "up")}
-        onMoveDown={(id) => handleMovePage(id, "down")}
+        onRename={handleRenamePage}
+        onReorder={handleReorderPages}
       />
 
       {/* Main canvas */}
-      <div className="flex flex-col">
+      <div className="flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center justify-between border-b border-border bg-ivory px-5 py-3">
+        <div className="flex items-center justify-between border-b border-border bg-ivory px-5 py-3 shrink-0">
           <div className="flex items-center gap-4">
             <p className="font-sans text-[11px] font-medium text-ink">
               {selectedPage?.name ?? "No page selected"}
@@ -248,7 +295,7 @@ export function AdminEditor({ initialPages, initialBlocks, initialPageId }: Admi
             blocks={blocks}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
-            onAddBlock={handleAddBlock}
+            onDropBlock={handleAddBlock}
             onUpdateBlock={handleUpdateBlock}
             onDeleteBlock={handleDeleteBlock}
           />
