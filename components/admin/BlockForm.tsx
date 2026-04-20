@@ -5,15 +5,16 @@ import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type {
-  BlockData,
-  BlockRecord,
-  CardData,
-  EmbedData,
-  FormData,
-  LinkListData,
-  RichTextData,
-  TimelineData
+import {
+  pageSections,
+  type BlockData,
+  type BlockRecord,
+  type CardData,
+  type EmbedData,
+  type FormData,
+  type LinkListData,
+  type RichTextData,
+  type TimelineData
 } from "@/types/blocks";
 
 type BlockFormProps = {
@@ -188,6 +189,8 @@ export function BlockForm({ block, onCancel, onSave, inline = false }: BlockForm
   }
 
   const data = draft.data;
+  const sectionOptions = pageSections[draft.page] ?? [];
+  const sectionInList = sectionOptions.some((s) => s.key === draft.section);
 
   return (
     <div className={`space-y-5 bg-ivory p-5 ${inline ? "" : "border border-border"}`}>
@@ -212,14 +215,25 @@ export function BlockForm({ block, onCancel, onSave, inline = false }: BlockForm
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-2">
           <span className="font-sans text-[10px] uppercase tracking-label text-stone">Section</span>
-          <input
+          <select
             value={draft.section}
             onChange={(event) =>
               setDraft((current) =>
                 current ? { ...current, section: event.target.value } : current
               )
             }
-          />
+          >
+            {!sectionInList && draft.section ? (
+              <option value={draft.section}>
+                {draft.section} (unused on public page)
+              </option>
+            ) : null}
+            {sectionOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-2">
           <span className="font-sans text-[10px] uppercase tracking-label text-stone">

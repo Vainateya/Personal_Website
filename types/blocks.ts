@@ -114,3 +114,29 @@ export const pagePaths: Record<PageName, string> = {
   now: "/now",
   connect: "/connect"
 };
+
+// Canonical sections rendered by each public page. New blocks must land
+// in one of these sections for the corresponding page to display them.
+export const pageSections: Record<PageName, readonly { key: string; label: string }[]> = {
+  home: [
+    { key: "bio", label: "Bio" },
+    { key: "research", label: "Research Experience" },
+    { key: "industry", label: "Industry Experience" },
+    { key: "building", label: "Building / Projects" }
+  ],
+  writing: [
+    { key: "essays", label: "Essays" },
+    { key: "notes", label: "Research Notes" }
+  ],
+  talks: [{ key: "talks", label: "Talks" }],
+  now: [
+    { key: "working", label: "What I'm Working On This Month" },
+    { key: "reading", label: "What I'm Reading" },
+    { key: "book-recommendations", label: "Suggest A Book" }
+  ],
+  connect: [
+    { key: "contact", label: "Contact / Collaboration" },
+    { key: "links", label: "Social / Professional Links" },
+    { key: "feedback", label: "Anonymous Feedback" }
+  ]
+};

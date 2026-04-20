@@ -8,7 +8,13 @@ import { PreviewToggle } from "@/components/admin/PreviewToggle";
 import { BlockRenderer } from "@/components/public/BlockRenderer";
 import { createEmptyBlock } from "@/lib/block-defaults";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
-import { pageLabels, pages, type BlockRecord, type PageName } from "@/types/blocks";
+import {
+  pageLabels,
+  pageSections,
+  pages,
+  type BlockRecord,
+  type PageName
+} from "@/types/blocks";
 
 type BlockEditorProps = {
   initialPage: PageName;
@@ -42,10 +48,10 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
     });
   }
 
-  async function handleAddBlock(type: BlockRecord["type"]) {
+  async function handleAddBlock(type: BlockRecord["type"], section: string) {
     const nextOrder =
       pageBlocks.reduce((max, block) => Math.max(max, block.order), 0) + 1;
-    const draft = createEmptyBlock(selectedPage, "untitled", type, nextOrder);
+    const draft = createEmptyBlock(selectedPage, section, type, nextOrder);
     const { data, error } = await supabase
       .from("blocks")
       .insert(draft)
@@ -227,7 +233,10 @@ export function BlockEditor({ initialPage, initialBlocks }: BlockEditorProps) {
                 enabled={previewMode}
                 onToggle={() => setPreviewMode((current) => !current)}
               />
-              <AddBlockMenu onAdd={handleAddBlock} />
+              <AddBlockMenu
+                sections={pageSections[selectedPage]}
+                onAdd={handleAddBlock}
+              />
               <button
                 type="button"
                 onClick={handleLogout}
