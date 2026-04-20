@@ -1,142 +1,155 @@
-export const pages = ["home", "writing", "talks", "now", "connect"] as const;
-export type PageName = (typeof pages)[number];
+// ============================================================
+// Core data model — v2 grid-based page builder
+// ============================================================
 
 export const blockTypes = [
-  "card",
+  "card_list",
   "richtext",
   "linklist",
+  "media",
   "embed",
   "form",
   "timeline"
 ] as const;
+
 export type BlockType = (typeof blockTypes)[number];
 
-export type LinkItem = {
-  label: string;
-  url: string;
+export const blockTypeLabels: Record<BlockType, string> = {
+  card_list: "Card List",
+  richtext:  "Rich Text",
+  linklist:  "Link List",
+  media:     "Media",
+  embed:     "Embed",
+  form:      "Form",
+  timeline:  "Timeline"
 };
 
-export type CardData = {
+// Default block dimensions (w × h) per type
+export const blockTypeDefaults: Record<BlockType, { w: number; h: number }> = {
+  card_list: { w: 12, h: 8 },
+  richtext:  { w: 8,  h: 4 },
+  linklist:  { w: 4,  h: 4 },
+  media:     { w: 6,  h: 4 },
+  embed:     { w: 8,  h: 4 },
+  form:      { w: 6,  h: 6 },
+  timeline:  { w: 8,  h: 6 }
+};
+
+// ── Pages ─────────────────────────────────────────────────
+export type PageRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  nav_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// ── Block data types ──────────────────────────────────────
+
+export type CardItem = {
+  id: string;
+  thumbnail_url: string;
   title: string;
   institution: string;
   description: string;
   year: string;
-  links: LinkItem[];
   tags: string[];
-  thumbnail_url: string;
-  date?: string;
-  slug?: string;
-  venue?: string;
+  links: { label: string; url: string }[];
+};
+
+export type CardListData = {
+  cards: CardItem[];
 };
 
 export type RichTextData = {
-  title?: string;
-  slug?: string;
-  date?: string;
-  excerpt?: string;
-  content: string;
+  content: string; // HTML from Tiptap
 };
 
 export type LinkListData = {
-  items: Array<{
-    icon: string;
-    label: string;
-    url: string;
-  }>;
+  items: { icon: string; label: string; url: string }[];
+};
+
+export type MediaData = {
+  url: string;
+  caption: string;
+  type: "image" | "video";
 };
 
 export type EmbedData = {
   url: string;
   caption: string;
-  type: "video" | "slides";
 };
 
-export type FormField = {
+export type FormFieldDef = {
   name: string;
-  type: string;
+  type: string;        // text | email | textarea | ...
   placeholder: string;
   required: boolean;
 };
 
 export type FormData = {
   form_type: "contact" | "feedback" | "bookrec";
-  fields: FormField[];
+  fields: FormFieldDef[];
+};
+
+export type TimelineEntry = {
+  year: string;
+  title: string;
+  institution: string;
+  description: string;
 };
 
 export type TimelineData = {
-  entries: Array<{
-    year: string;
-    title: string;
-    institution: string;
-    description: string;
-  }>;
+  entries: TimelineEntry[];
 };
 
 export type BlockData =
-  | CardData
+  | CardListData
   | RichTextData
   | LinkListData
+  | MediaData
   | EmbedData
   | FormData
   | TimelineData;
 
+// ── Block record (matches DB) ─────────────────────────────
 export type BlockRecord = {
   id: string;
-  page: PageName;
-  section: string;
+  page_id: string;
   type: BlockType;
-  order: number;
-  is_public: boolean;
+  x: number; // column start, 0-indexed
+  y: number; // row start, 0-indexed
+  w: number; // column span (1–12)
+  h: number; // row span (1+)
   data: BlockData;
   created_at: string;
   updated_at: string;
 };
 
-export type FormSubmissionRecord = {
-  id: string;
-  form_type: string;
-  data: Record<string, unknown>;
-  created_at: string;
-};
+// ── Helpers ───────────────────────────────────────────────
 
-export const pageLabels: Record<PageName, string> = {
-  home: "Home",
-  writing: "Writing",
-  talks: "Talks",
-  now: "Now",
-  connect: "Connect"
-};
+export function emptyCardItem(): CardItem {
+  return {
+    id: crypto.randomUUID(),
+    thumbnail_url: "",
+    title: "",
+    institution: "",
+    description: "",
+    year: "",
+    tags: [],
+    links: []
+  };
+}
 
-export const pagePaths: Record<PageName, string> = {
-  home: "/",
-  writing: "/writing",
-  talks: "/talks",
-  now: "/now",
-  connect: "/connect"
-};
-
-// Canonical sections rendered by each public page. New blocks must land
-// in one of these sections for the corresponding page to display them.
-export const pageSections: Record<PageName, readonly { key: string; label: string }[]> = {
-  home: [
-    { key: "bio", label: "Bio" },
-    { key: "research", label: "Research Experience" },
-    { key: "industry", label: "Industry Experience" },
-    { key: "building", label: "Building / Projects" }
-  ],
-  writing: [
-    { key: "essays", label: "Essays" },
-    { key: "notes", label: "Research Notes" }
-  ],
-  talks: [{ key: "talks", label: "Talks" }],
-  now: [
-    { key: "working", label: "What I'm Working On This Month" },
-    { key: "reading", label: "What I'm Reading" },
-    { key: "book-recommendations", label: "Suggest A Book" }
-  ],
-  connect: [
-    { key: "contact", label: "Contact / Collaboration" },
-    { key: "links", label: "Social / Professional Links" },
-    { key: "feedback", label: "Anonymous Feedback" }
-  ]
-};
+export function defaultBlockData(type: BlockType): BlockData {
+  switch (type) {
+    case "card_list": return { cards: [] };
+    case "richtext":  return { content: "<p></p>" };
+    case "linklist":  return { items: [] };
+    case "media":     return { url: "", caption: "", type: "image" };
+    case "embed":     return { url: "", caption: "" };
+    case "form":      return { form_type: "contact", fields: [] };
+    case "timeline":  return { entries: [] };
+  }
+}

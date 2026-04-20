@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { submitForm } from "@/lib/blocks";
+import { submitFormResponse } from "@/lib/blocks";
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      form_type?: string;
+      block_id?: string;
       data?: Record<string, unknown>;
     };
 
-    if (!body.form_type || !body.data) {
-      return NextResponse.json({ error: "Missing form payload." }, { status: 400 });
+    if (!body.block_id || !body.data) {
+      return NextResponse.json({ error: "Missing block_id or data." }, { status: 400 });
     }
 
-    await submitForm(body.form_type, body.data);
+    await submitFormResponse(body.block_id, body.data);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

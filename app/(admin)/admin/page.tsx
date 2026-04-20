@@ -1,25 +1,20 @@
-import { BlockEditor } from "@/components/admin/BlockEditor";
 import { requireAdminSession } from "@/lib/auth";
-import { getAllBlocksByPage } from "@/lib/blocks";
-import { pages, type BlockRecord, type PageName } from "@/types/blocks";
+import { getAllPages } from "@/lib/pages";
+import { getBlocksByPageId } from "@/lib/blocks";
+import { AdminEditor } from "@/components/admin/AdminEditor";
 
-export default async function AdminPage({
-  searchParams
-}: {
-  searchParams?: { page?: string };
-}) {
+export default async function AdminPage() {
   await requireAdminSession();
 
-  const requestedPage = searchParams?.page;
-  const initialPage = (pages.includes(requestedPage as PageName)
-    ? requestedPage
-    : "home") as PageName;
+  const pages = await getAllPages();
+  const firstPage = pages[0] ?? null;
+  const initialBlocks = firstPage ? await getBlocksByPageId(firstPage.id) : [];
 
-  const entries = await Promise.all(
-    pages.map(async (page) => [page, await getAllBlocksByPage(page)] as const)
+  return (
+    <AdminEditor
+      initialPages={pages}
+      initialBlocks={initialBlocks}
+      initialPageId={firstPage?.id ?? ""}
+    />
   );
-
-  const initialBlocks = Object.fromEntries(entries) as Record<PageName, BlockRecord[]>;
-
-  return <BlockEditor initialPage={initialPage} initialBlocks={initialBlocks} />;
 }
